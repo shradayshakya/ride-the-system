@@ -1,0 +1,738 @@
+<title>__TITLE__</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800&family=Source+Sans+3:wght@400;600;700&family=IBM+Plex+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: a transit-map of the system. Stations are components, coloured by build status; each scenario is a "line" you ride step by step. Below it: the table index and an optional status board. */
+:root {
+  --bg: #f3f5f2; --paper: #ffffff; --ink: #1b2420; --muted: #5c6a63; --line: #d4dcd6; --wire: #b7c3bb;
+  --accent: #0b6e69; --accent-ink: #ffffff; --accent-soft: #dcefec;
+  --built: #4f6b5d; --built-soft: #e7eee9;
+  --recent: #1d63b8; --recent-soft: #e1ecf9;
+  --progress: #b9700c; --progress-soft: #fbf0dc;
+  --left: #a23a52; --left-soft: #f7e3e8;
+  --yes: #2d7a46; --yes-soft: #e1f2e6; --no: #b3343c; --no-soft: #f8e4e5;
+  --f-display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --f-body: "Source Sans 3", "Segoe UI", system-ui, sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #111714; --paper: #18211d; --ink: #e3ebe6; --muted: #98a89f; --line: #2b3832; --wire: #3d4c45;
+  --accent: #4cc1b8; --accent-ink: #0d1a17; --accent-soft: #143430;
+  --built: #9db5a8; --built-soft: #1f2b26; --recent: #79aef0; --recent-soft: #172a42;
+  --progress: #eba64a; --progress-soft: #382a14; --left: #ee8aa0; --left-soft: #3a1d26;
+  --yes: #72cf90; --yes-soft: #17321f; --no: #f07a80; --no-soft: #3a1d20; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #111714; --paper: #18211d; --ink: #e3ebe6; --muted: #98a89f; --line: #2b3832; --wire: #3d4c45;
+  --accent: #4cc1b8; --accent-ink: #0d1a17; --accent-soft: #143430;
+  --built: #9db5a8; --built-soft: #1f2b26; --recent: #79aef0; --recent-soft: #172a42;
+  --progress: #eba64a; --progress-soft: #382a14; --left: #ee8aa0; --left-soft: #3a1d26;
+  --yes: #72cf90; --yes-soft: #17321f; --no: #f07a80; --no-soft: #3a1d20; color-scheme: dark }
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font: 16px/1.55 var(--f-body); }
+.wrap { max-width: 1180px; margin: 0 auto; padding-inline: 20px; padding-block: 32px 72px; display: grid; gap: 48px; }
+h1, h2, h3 { font-family: var(--f-display); margin: 0; text-wrap: balance; letter-spacing: -0.01em; }
+h1 { font-size: clamp(30px, 5vw, 46px); font-weight: 800; line-height: 1.05; }
+h2 { font-size: 24px; font-weight: 700; }
+h3 { font-size: 17px; font-weight: 700; }
+p { margin: 0; }
+.eyebrow { font: 600 12px/1 var(--f-mono); letter-spacing: .1em; text-transform: uppercase; color: var(--accent); }
+.lede { max-width: 68ch; color: var(--muted); font-size: 17px; }
+header { display: grid; gap: 14px; }
+.oneminute { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; }
+.oneminute div { background: var(--paper); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; display: grid; gap: 4px; align-content: start; }
+.oneminute b { font-family: var(--f-display); font-size: 15px; }
+.oneminute span { color: var(--muted); font-size: 15px; }
+section { display: grid; gap: 16px; min-width: 0; }
+.sec-head { display: grid; gap: 6px; }
+.sec-head p { color: var(--muted); max-width: 70ch; }
+
+/* playground — full-bleed AWS-style map with a video-like player */
+.bleed { width: min(1560px, calc(100vw - 40px)); margin-inline: calc(50% - min(780px, calc(50vw - 20px))); display: grid; gap: 14px; min-width: 0; }
+.controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.controls .label { font: 600 12px var(--f-mono); color: var(--muted); text-transform: uppercase; letter-spacing: .06em; margin-right: 4px; }
+button { font: 600 14px var(--f-body); border-radius: 8px; border: 1px solid var(--line); background: var(--paper); color: var(--ink); padding: 8px 14px; cursor: pointer; }
+button:hover { border-color: var(--accent); }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+button:disabled { opacity: .4; cursor: default; }
+.mapbox { background: var(--paper); border: 1px solid var(--line); border-radius: 14px; overflow-x: auto; }
+.mapinner { position: relative; min-width: 1180px; }
+svg.map { display: block; width: 100%; height: auto; }
+.grp { fill: var(--bg); stroke: var(--line); stroke-dasharray: 5 5; }
+.grp-label { font: 600 11px var(--f-mono); letter-spacing: .08em; text-transform: uppercase; fill: var(--muted); }
+.edge { fill: none; stroke: var(--wire); stroke-width: 1.6; transition: stroke .25s, opacity .25s, stroke-width .25s; }
+.edge.on { stroke: var(--accent); stroke-width: 3.2; }
+.arrowhead { fill: var(--wire); }
+.node { cursor: pointer; transition: opacity .25s; }
+.node .hit { fill: transparent; }
+.node .tile { transition: transform .25s; }
+.node text.t { font: 700 13.5px var(--f-display); fill: var(--ink); }
+.node text.s { font: 11.5px var(--f-body); fill: var(--muted); }
+.node .halo { fill: none; stroke: var(--accent); stroke-width: 3; opacity: 0; }
+.node.on .halo { opacity: 1; }
+.node.speaker .halo { animation: pulse 1.4s ease-in-out infinite; }
+@keyframes pulse { 50% { stroke-width: 7; opacity: .5; } }
+.node.sel .halo { opacity: 1; stroke-dasharray: 4 4; }
+.dim .node:not(.on) { opacity: .28; }
+.dim .edge:not(.on) { opacity: .2; }
+.statusdot { stroke: var(--paper); stroke-width: 2; }
+.nostatus .statusdot { display: none; }
+.bubble { position: absolute; z-index: 2; width: max-content; max-width: 260px; background: var(--ink); color: var(--paper); border-radius: 12px; padding: 10px 13px; font-size: 14.5px; line-height: 1.4; box-shadow: 0 8px 24px rgb(0 0 0 / .18); pointer-events: none; transition: opacity .2s; }
+.bubble b { display: block; font: 600 11px var(--f-mono); letter-spacing: .06em; text-transform: uppercase; opacity: .75; margin-bottom: 3px; }
+.bubble.hidden { opacity: 0; }
+.player { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; background: var(--paper); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; }
+.player .big { width: 44px; height: 44px; border-radius: 50%; padding: 0; background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-size: 17px; }
+.player .icon { width: 38px; height: 38px; padding: 0; font-size: 15px; }
+.timeline { flex: 1 1 260px; display: flex; gap: 4px; min-width: 200px; }
+.timeline button { flex: 1; height: 10px; padding: 0; border-radius: 3px; background: var(--line); border: 0; position: relative; overflow: hidden; }
+.timeline button.done { background: var(--accent); }
+.timeline button .fill { position: absolute; inset: 0 auto 0 0; width: 0; background: var(--accent); }
+.keys { font: 12px var(--f-mono); color: var(--muted); white-space: nowrap; }
+.keys kbd { font: 600 11px var(--f-mono); padding: 2px 6px; border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 5px; background: var(--bg); color: var(--ink); }
+.player .count { font: 600 13px var(--f-mono); color: var(--muted); min-width: 64px; text-align: right; }
+.speed { display: flex; gap: 4px; }
+.speed button { padding: 6px 9px; font: 600 12px var(--f-mono); }
+.below { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 14px; align-items: start; }
+@media (max-width: 900px) { .below { grid-template-columns: 1fr; } }
+.panel { background: var(--paper); border: 1px solid var(--line); border-radius: 12px; padding: 18px; display: grid; gap: 12px; min-width: 0; }
+.panel .kicker { font: 600 11px var(--f-mono); color: var(--muted); text-transform: uppercase; letter-spacing: .08em; }
+.panel p { font-size: 15px; }
+.muted { color: var(--muted); }
+.route { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font: 700 15px var(--f-display); }
+.route .arrow { color: var(--accent); }
+.quote { font-size: 19px; line-height: 1.45; font-family: var(--f-display); font-weight: 500; margin: 0; }
+.msg { border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.msg-head { display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: var(--bg); font: 600 12px var(--f-mono); color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+.msg dl { margin: 0; display: grid; grid-template-columns: max-content 1fr; }
+.msg dt, .msg dd { margin: 0; padding: 7px 12px; border-top: 1px solid var(--line); font-size: 14px; }
+.msg dt { color: var(--muted); }
+.msg dd { font-weight: 600; min-width: 0; overflow-wrap: anywhere; }
+.raw { margin: 0; padding: 10px 12px; background: var(--bg); border-top: 1px solid var(--line); font: 12px/1.55 var(--f-mono); white-space: pre-wrap; overflow-wrap: anywhere; }
+.linkbtn { background: none; border: 0; padding: 0; color: var(--accent); font: 600 13px var(--f-body); cursor: pointer; justify-self: start; }
+.convo { position: relative; list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; max-height: 520px; overflow: auto; }
+.convo li button { width: 100%; text-align: left; display: grid; gap: 2px; padding: 8px 10px; border-radius: 8px; border: 1px solid transparent; background: none; font-weight: 400; }
+.convo li button:hover { border-color: var(--line); }
+.convo li.cur button { background: var(--accent-soft); border-color: var(--accent); }
+.convo .who { font: 600 12px var(--f-mono); color: var(--accent); }
+.convo .line { font-size: 14px; color: var(--ink); }
+.convo li.future { display: none; }
+.chip { display: inline-flex; align-items: center; gap: 6px; font: 600 11.5px/1 var(--f-mono); padding: 5px 9px; border-radius: 999px; white-space: nowrap; }
+.chip.built { background: var(--built-soft); color: var(--built); }
+.chip.recent { background: var(--recent-soft); color: var(--recent); }
+.chip.progress { background: var(--progress-soft); color: var(--progress); }
+.chip.left { background: var(--left-soft); color: var(--left); }
+.facts { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; font-size: 14px; }
+.facts li { padding-left: 14px; position: relative; }
+.facts li::before { content: ""; position: absolute; left: 0; top: .65em; width: 6px; height: 6px; border-radius: 50%; background: var(--wire); }
+code, .mono { font-family: var(--f-mono); font-size: .88em; }
+.legend { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; font-size: 13px; color: var(--muted); }
+.legend .sw { display: inline-flex; align-items: center; gap: 6px; }
+.legend i { width: 14px; height: 14px; border-radius: 4px; display: inline-block; }
+.realnote { font-size: 14px; border-left: 3px solid var(--accent); padding: 8px 12px; background: var(--accent-soft); border-radius: 0 8px 8px 0; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+body { overflow-x: clip; }
+/* rule bench */
+.bench { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 16px; }
+@media (max-width: 860px) { .bench { grid-template-columns: 1fr; } }
+.card { background: var(--paper); border: 1px solid var(--line); border-radius: 12px; padding: 18px; display: grid; gap: 14px; min-width: 0; }
+.tests { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 14px; }
+fieldset { border: 0; padding: 0; margin: 0; display: grid; gap: 8px; align-content: start; }
+legend { font: 700 14px var(--f-display); padding: 0; margin-bottom: 6px; }
+label { display: grid; gap: 2px; font-size: 13px; color: var(--muted); }
+input[type="number"] { font: 15px var(--f-mono); padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--ink); width: 100%; }
+.presets { display: flex; flex-wrap: wrap; gap: 6px; }
+.presets button { font-size: 13px; padding: 6px 10px; }
+.verdicts { display: grid; grid-template-columns: auto 1fr 1fr; gap: 0; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; font-variant-numeric: tabular-nums; }
+.verdicts > div { padding: 9px 12px; border-bottom: 1px solid var(--line); display: flex; align-items: center; gap: 8px; }
+.verdicts > div:nth-last-child(-n+3) { border-bottom: 0; }
+.verdicts .h { font: 600 11px var(--f-mono); text-transform: uppercase; letter-spacing: .06em; color: var(--muted); background: var(--bg); }
+.yn { font: 700 12px var(--f-mono); padding: 3px 8px; border-radius: 5px; }
+.yn.y { background: var(--yes-soft); color: var(--yes); }
+.yn.n { background: var(--no-soft); color: var(--no); }
+.why { font-size: 13px; color: var(--muted); }
+.diff { font-size: 14px; padding: 10px 12px; border-radius: 8px; background: var(--progress-soft); color: var(--ink); }
+.tree { font: 13px/1.7 var(--f-mono); margin: 0; padding: 0; list-style: none; }
+.tree li { display: flex; gap: 8px; align-items: baseline; }
+.tree .mk { width: 16px; flex: none; font-weight: 600; }
+.tree .ok { color: var(--yes); } .tree .ko { color: var(--no); }
+
+/* board */
+.board { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 14px; align-items: start; }
+.col { display: grid; gap: 10px; }
+.col h3 { display: flex; align-items: center; gap: 8px; }
+.col h3 .n { font: 600 12px var(--f-mono); color: var(--muted); }
+.item { background: var(--paper); border: 1px solid var(--line); border-left: 4px solid var(--c); border-radius: 8px; padding: 10px 12px; display: grid; gap: 3px; }
+.item b { font-size: 15px; }
+.item span { font-size: 13.5px; color: var(--muted); }
+.item .k { font: 600 11.5px var(--f-mono); color: var(--c); }
+.col.recent { --c: var(--recent); } .col.progress { --c: var(--progress); } .col.left { --c: var(--left); } .col.built { --c: var(--built); }
+.foot { font-size: 13px; color: var(--muted); }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+/* full screen: the map takes the spare height; player one row; narration capped and scrolls inside */
+.bleed:fullscreen, .bleed.expanded { width: 100%; height: 100vh; margin: 0; padding: 12px 20px; background: var(--bg); display: flex; flex-direction: column; gap: 10px; overflow: hidden; }
+.bleed.expanded { position: fixed; inset: 0; z-index: 50; height: 100%; padding-top: calc(12px + env(safe-area-inset-top, 0px)); padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px)); }
+.bleed:fullscreen > .controls, .bleed.expanded > .controls, .bleed:fullscreen > .player, .bleed.expanded > .player { flex: none; }
+.bleed:fullscreen .mapbox, .bleed.expanded .mapbox { flex: 1 1 0; min-height: 0; overflow: hidden; display: flex; align-items: center; justify-content: center; }
+.bleed:fullscreen .mapinner, .bleed.expanded .mapinner { min-width: 0; flex: none; }
+.bleed:fullscreen svg.map, .bleed.expanded svg.map { height: 100%; }
+.bleed:fullscreen .below, .bleed.expanded .below { flex: none; height: min(26vh, 260px); }
+.bleed:fullscreen .below > .panel, .bleed.expanded .below > .panel { height: 100%; overflow: auto; align-content: start; padding: 12px 14px; gap: 8px; }
+.bleed:fullscreen .convo, .bleed.expanded .convo { max-height: none; }
+.bleed:fullscreen .quote, .bleed.expanded .quote { font-size: 16px; }
+body.noscroll { overflow: hidden; }
+button.chip { border: 1px solid transparent; cursor: pointer; }
+button.chip:hover { border-color: currentColor; }
+button.chip[aria-pressed="true"] { border-color: currentColor; box-shadow: 0 0 0 2px var(--paper), 0 0 0 4px currentColor; }
+button.chip .n { opacity: .7; margin-left: 2px; }
+.node.hl .halo { opacity: 1; stroke: var(--hlc, var(--accent)); stroke-dasharray: none; }
+.dim .node.hl { opacity: 1; }
+.hl-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.hl-list button { width: 100%; text-align: left; display: grid; gap: 2px; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line); background: none; font-weight: 400; }
+.hl-list button:hover { border-color: var(--hlc, var(--accent)); }
+.hl-list b { font-size: 15px; } .hl-list span { font-size: 13.5px; color: var(--muted); }
+.zoomctl { position: absolute; top: 10px; right: 10px; z-index: 3; display: flex; flex-direction: column; gap: 4px; }
+.zoomctl button { width: 36px; height: 36px; padding: 0; font: 600 18px/1 var(--f-body); background: var(--paper); box-shadow: 0 2px 8px rgb(0 0 0 / .12); }
+.zoomctl .lvl { font: 600 11px var(--f-mono); color: var(--muted); text-align: center; background: var(--paper); border-radius: 6px; padding: 3px 0; border: 1px solid var(--line); }
+svg.map.zoomed { cursor: grab; touch-action: none; }
+svg.map.panning { cursor: grabbing; }
+.tbls { display: grid; gap: 6px; }
+.tbl { display: grid; grid-template-columns: 64px max-content minmax(0, 1fr); gap: 4px 10px; align-items: baseline; font-size: 14px; }
+.tbl code { font-weight: 600; }
+.tbl > span:last-child { color: var(--muted); }
+.op { font: 700 10.5px/1 var(--f-mono); text-transform: uppercase; letter-spacing: .05em; padding: 4px 6px; border-radius: 4px; text-align: center; }
+.op.write { background: var(--accent); color: var(--accent-ink); }
+.op.read { border: 1px solid var(--wire); color: var(--muted); }
+.op.change { background: var(--progress-soft); color: var(--progress); }
+@media (max-width: 640px) { .tbl { grid-template-columns: 64px minmax(0, 1fr); } .tbl > span:last-child { grid-column: 2; } }
+.tchips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 3px; }
+.tchips code { font-size: 11px; padding: 1px 5px; border-radius: 4px; border: 1px solid var(--line); color: var(--muted); }
+.tchips code.op-write { border-color: var(--accent); color: var(--accent); }
+.tchips code.op-change { border-color: var(--progress); color: var(--progress); }
+.ttag { position: absolute; z-index: 2; pointer-events: none; background: var(--paper); border: 1px solid var(--accent); border-radius: 8px; padding: 5px 8px; display: grid; gap: 2px; font: 11.5px/1.3 var(--f-mono); color: var(--ink); white-space: nowrap; box-shadow: 0 4px 14px rgb(0 0 0 / .14); }
+.ttag i { font-style: normal; font-weight: 700; font-size: 9.5px; margin-right: 5px; padding: 1px 4px; border-radius: 3px; }
+.ttag i.write { background: var(--accent); color: var(--accent-ink); }
+.ttag i.read { border: 1px solid var(--wire); color: var(--muted); }
+.ttag i.change { background: var(--progress-soft); color: var(--progress); }
+.tref { width: 100%; border-collapse: collapse; font-size: 14px; }
+.tref th, .tref td { text-align: left; vertical-align: top; padding: 10px 12px; border-bottom: 1px solid var(--line); }
+.tref th { font: 600 11px var(--f-mono); text-transform: uppercase; letter-spacing: .06em; color: var(--muted); background: var(--bg); }
+.tref td:first-child code { font-weight: 600; white-space: nowrap; }
+.tref .where { color: var(--muted); font-size: 12.5px; display: block; margin-top: 2px; }
+.uses { display: flex; flex-wrap: wrap; gap: 5px; }
+.uses button { font: 500 12px var(--f-body); padding: 3px 8px; border-radius: 6px; display: inline-flex; gap: 6px; align-items: center; }
+.uses .op { padding: 2px 4px; font-size: 9.5px; }
+.trefbox { background: var(--paper); border: 1px solid var(--line); border-radius: 12px; overflow-x: auto; }
+</style>
+
+<div class="wrap">
+  <header>
+    <span class="eyebrow" id="eyebrow"></span>
+    <h1 id="title"></h1>
+    <p class="lede" id="lede"></p>
+    <div class="oneminute" id="intro"></div>
+  </header>
+
+  <section aria-labelledby="pg">
+    <div class="sec-head">
+      <h2 id="pg">Ride the system</h2>
+      <p>Pick a scenario and press play. Each step shows who is asking whom, what they want in plain words, and what the real message looks like. Click any service to read what it does.</p>
+    </div>
+    <div class="bleed">
+      <div class="controls" role="group" aria-label="Scenarios">
+        <span class="label">Scenario</span>
+        <span id="scenarioButtons" style="display:contents"></span>
+      </div>
+      <div class="controls">
+        <span id="statusCtl" style="display:contents">
+          <span class="label">Build status</span>
+          <button id="statusToggle" aria-pressed="true">Shown</button>
+          <span class="legend">
+            <button class="chip built" data-status="built" aria-pressed="false">Built</button><button class="chip recent" data-status="recent" aria-pressed="false">Added recently</button><button class="chip progress" data-status="progress" aria-pressed="false">In progress</button><button class="chip left" data-status="left" aria-pressed="false">Not started / blocked</button>
+          </span>
+        </span>
+        <span class="legend" id="legend" style="margin-left:auto"></span>
+      </div>
+      <div class="mapbox"><div class="mapinner" id="mapinner">
+        <svg class="map" id="map" viewBox="0 0 1620 1000" role="img" aria-label="Architecture map: services and the messages between them"></svg>
+        <div class="bubble hidden" id="bubble" aria-hidden="true"></div>
+        <div class="zoomctl" role="group" aria-label="Zoom">
+          <button id="zoomIn" title="Zoom in (+, or Ctrl/⌘ + scroll)" aria-label="Zoom in">+</button>
+          <button id="zoomOut" title="Zoom out (−)" aria-label="Zoom out">−</button>
+          <button id="zoomFit" title="Back to 100% (0)" aria-label="Fit the whole map" style="font-size:14px">⤢</button>
+          <span class="lvl" id="zoomLvl" aria-live="polite">100%</span>
+        </div>
+      </div></div>
+      <div class="player" role="group" aria-label="Playback">
+        <button class="icon" id="restart" title="Start over" aria-label="Start over">⟲</button>
+        <button class="icon" id="prev" title="Previous step (←)" aria-label="Previous step" aria-keyshortcuts="ArrowLeft">◀</button>
+        <button class="big" id="play" title="Play / pause (Space)" aria-label="Play" aria-keyshortcuts="Space">▶</button>
+        <button class="icon" id="next" title="Next step (→)" aria-label="Next step" aria-keyshortcuts="ArrowRight">▶▏</button>
+        <div class="timeline" id="progress"></div>
+        <span class="count" id="count"></span>
+        <span class="keys" aria-hidden="true"><kbd>←</kbd> <kbd>Space</kbd> <kbd>→</kbd> <kbd>F</kbd> <kbd>+</kbd><kbd>−</kbd><kbd>0</kbd></span>
+        <button class="icon" id="fullscreen" title="Full screen (F)" aria-label="Full screen" aria-keyshortcuts="F" aria-pressed="false">⛶</button>
+        <div class="speed" role="group" aria-label="Speed">
+          <button data-speed="0.75" aria-pressed="false">0.75×</button><button data-speed="1" aria-pressed="true">1×</button><button data-speed="1.5" aria-pressed="false">1.5×</button><button data-speed="2" aria-pressed="false">2×</button>
+        </div>
+      </div>
+      <div class="below">
+        <div class="panel" id="now" aria-live="polite"></div>
+        <div class="panel">
+          <span class="kicker">The conversation so far</span>
+          <ol class="convo" id="convo"></ol>
+        </div>
+      </div>
+    </div>
+  </section>
+
+
+  <section aria-labelledby="tables-h" id="tablesSec" hidden>
+    <div class="sec-head">
+      <h2 id="tables-h">Which tables matter, and when</h2>
+      <p><b>Write</b> means the step saves rows there. <b>Read</b> means it looks rows up. <b>Change</b> means a row change in that table is what wakes up the next service, through change capture. Click a step to watch it on the map.</p>
+    </div>
+    <div class="trefbox"><table class="tref" id="tref"></table></div>
+  </section>
+
+  <section aria-labelledby="board-h" id="boardSec" hidden>
+    <div class="sec-head"><h2 id="board-h"></h2><p id="boardNote"></p></div>
+    <div class="board" id="board"></div>
+  </section>
+</div>
+
+<script>
+/*RIDE_DATA*/
+
+// ---------- map ----------
+const RIDE = window.RIDE;
+const CW = (RIDE.canvas && RIDE.canvas.w) || 1620, CH = (RIDE.canvas && RIDE.canvas.h) || 1000;
+document.getElementById('map').setAttribute('viewBox', `0 0 ${CW} ${CH}`);
+const COLORS = Object.assign({ compute:'#ED7100', msg:'#E7157B', db:'#C925D1', storage:'#7AA116', net:'#8C4FFF', security:'#DD344C', ext:'#6B7785', mule:'#0A8FCB', drive:'#1E8E4E' }, RIDE.colors || {});
+const N = RIDE.nodes;
+const E = RIDE.edges;
+const GLYPH = {
+  bus: '<path d="M3 16 H29" stroke="#fff" stroke-width="2"/><circle cx="9" cy="16" r="3.6" fill="#fff"/><circle cx="16" cy="16" r="3.6" fill="#fff"/><circle cx="23" cy="16" r="3.6" fill="#fff"/>',
+  box: '<rect x="6" y="6" width="20" height="20" rx="4" fill="none" stroke="#fff" stroke-width="2.2"/>',
+  apigw: '<path d="M5 16 H12 M20 16 H27 M12 9 H20 V23 H12 Z" fill="none" stroke="#fff" stroke-width="2.2"/>',
+  dynamodb: '<path d="M6 9 V23 Q16 29 26 23 V9" fill="none" stroke="#fff" stroke-width="2"/><ellipse cx="16" cy="9" rx="10" ry="3.5" fill="#fff"/>',
+  sns: '<circle cx="16" cy="16" r="3.5" fill="#fff"/><path d="M9 9 A10 10 0 0 0 9 23 M23 9 A10 10 0 0 1 23 23" fill="none" stroke="#fff" stroke-width="2"/>',
+  kinesis: '<path d="M4 10 Q10 6 16 10 T28 10 M4 16 Q10 12 16 16 T28 16 M4 22 Q10 18 16 22 T28 22" fill="none" stroke="#fff" stroke-width="2"/>',
+  cloudwatch: '<path d="M5 22 L11 14 L16 18 L22 9 L27 13" fill="none" stroke="#fff" stroke-width="2.2" stroke-linejoin="round"/>',
+  web: '<rect x="4" y="7" width="24" height="18" rx="2.5" fill="none" stroke="#fff" stroke-width="2"/><path d="M4 12 H28" stroke="#fff" stroke-width="2"/>',
+  cognito: '<circle cx="16" cy="12" r="5" fill="none" stroke="#fff" stroke-width="2"/><path d="M8 26 Q8 19 16 19 Q24 19 24 26" fill="none" stroke="#fff" stroke-width="2"/>',
+  lambda: '<text x="16" y="24" text-anchor="middle" font-size="24" font-weight="700" fill="#fff" font-family="Georgia, serif">λ</text>',
+  s3: '<ellipse cx="16" cy="9" rx="10" ry="3.5" fill="none" stroke="#fff" stroke-width="2"/><path d="M6 9 L8.5 24 Q16 28 23.5 24 L26 9" fill="none" stroke="#fff" stroke-width="2" stroke-linejoin="round"/>',
+  sqs: '<rect x="4" y="11" width="6" height="10" rx="1.5" fill="#fff"/><rect x="13" y="11" width="6" height="10" rx="1.5" fill="#fff"/><rect x="22" y="11" width="6" height="10" rx="1.5" fill="#fff" opacity=".55"/>',
+  rds: '<ellipse cx="16" cy="9" rx="10" ry="3.5" fill="none" stroke="#fff" stroke-width="2"/><path d="M6 9 V23 Q16 29 26 23 V9 M6 16 Q16 22 26 16" fill="none" stroke="#fff" stroke-width="2"/>',
+  neptune: '<circle cx="9" cy="9" r="3.5" fill="#fff"/><circle cx="23" cy="11" r="3.5" fill="#fff"/><circle cx="15" cy="24" r="3.5" fill="#fff"/><path d="M9 9 L23 11 L15 24 Z" fill="none" stroke="#fff" stroke-width="1.8"/>',
+  ecs: '<rect x="5" y="7" width="22" height="18" rx="2.5" fill="none" stroke="#fff" stroke-width="2"/><path d="M12 7 V25 M19 7 V25" stroke="#fff" stroke-width="2"/>',
+  sched: '<circle cx="16" cy="16" r="10" fill="none" stroke="#fff" stroke-width="2"/><path d="M16 10 V16 L20.5 19" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round"/>',
+  pipes: '<path d="M4 12 H17 V7.5 L27 16 L17 24.5 V20 H4 Z" fill="#fff"/>',
+  stepfn: '<circle cx="16" cy="7" r="3.5" fill="#fff"/><circle cx="8.5" cy="24" r="3.5" fill="#fff"/><circle cx="23.5" cy="24" r="3.5" fill="#fff"/><path d="M16 7 L8.5 24 M16 7 L23.5 24" stroke="#fff" stroke-width="1.8"/>',
+  person: '<circle cx="16" cy="11" r="5" fill="#fff"/><path d="M6 27 Q6 18 16 18 Q26 18 26 27 Z" fill="#fff"/>',
+  mule: '<text x="16" y="22.5" text-anchor="middle" font-size="17" font-weight="800" fill="#fff" font-family="Arial, sans-serif">M</text>',
+  github: '<text x="16" y="21.5" text-anchor="middle" font-size="14" font-weight="700" fill="#fff" font-family="Menlo, monospace">{ }</text>',
+  drive: '<path d="M11 6 H21 L28 19 L23 27 H9 L4 19 Z" fill="none" stroke="#fff" stroke-width="2" stroke-linejoin="round"/><path d="M11 6 L18 19 H28 M4 19 L9 27" fill="none" stroke="#fff" stroke-width="1.6"/>',
+};
+const svg = document.getElementById('map');
+const NS = 'http://www.w3.org/2000/svg';
+const mk = (tag, attrs, parent) => { const el = document.createElementNS(NS, tag); for (const k in attrs) el.setAttribute(k, attrs[k]); (parent || svg).appendChild(el); return el; };
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+// groups
+const groups = RIDE.groups || [];
+groups.forEach(g => { mk('rect', {x:g.x, y:g.y, width:g.w, height:g.h, rx:14, class:'grp'}); const t = mk('text', {x:g.x + 12, y:g.y + 18, class:'grp-label'}); t.textContent = g.label; });
+
+// box used to clip edges: icon above, two text lines below
+function clip(n, px, py) {
+  const cx = n.x, cy = n.y, dx = px - cx, dy = py - cy;
+  if (!dx && !dy) return [cx, cy];
+  const hw = 46, top = 36, bot = 66; let t = Infinity;
+  if (dx > 0) t = Math.min(t, hw / dx); if (dx < 0) t = Math.min(t, -hw / dx);
+  if (dy > 0) t = Math.min(t, bot / dy); if (dy < 0) t = Math.min(t, top / -dy);
+  return [cx + dx * t, cy + dy * t];
+}
+function pathFor([a, b, via]) {
+  const A = N[a], B = N[b];
+  if (via && via.length) {
+    const p0 = clip(A, via[0][0], via[0][1]), last = via[via.length - 1], p1 = clip(B, last[0], last[1]);
+    const pts = [p0, ...via, p1]; const r = 16;
+    let d = `M${pts[0][0]} ${pts[0][1]}`;
+    for (let i = 1; i < pts.length - 1; i++) {
+      const [x0, y0] = pts[i - 1], [x1, y1] = pts[i], [x2, y2] = pts[i + 1];
+      const l1 = Math.hypot(x1 - x0, y1 - y0) || 1, l2 = Math.hypot(x2 - x1, y2 - y1) || 1, rr = Math.min(r, l1 / 2, l2 / 2);
+      d += ` L${x1 - (x1 - x0) / l1 * rr} ${y1 - (y1 - y0) / l1 * rr} Q${x1} ${y1} ${x1 + (x2 - x1) / l2 * rr} ${y1 + (y2 - y1) / l2 * rr}`;
+    }
+    return d + ` L${pts[pts.length - 1][0]} ${pts[pts.length - 1][1]}`;
+  }
+  const p0 = clip(A, B.x, B.y), p1 = clip(B, A.x, A.y);
+  if (A.x === B.x || A.y === B.y) return `M${p0[0]} ${p0[1]} L${p1[0]} ${p1[1]}`;
+  const mx = (p0[0] + p1[0]) / 2;
+  return `M${p0[0]} ${p0[1]} C ${mx} ${p0[1]}, ${mx} ${p1[1]}, ${p1[0]} ${p1[1]}`;
+}
+const defs = mk('defs', {});
+const mkr = mk('marker', {id:'ah', viewBox:'0 0 10 10', refX:9, refY:5, markerWidth:6, markerHeight:6, orient:'auto-start-reverse'}, defs);
+mk('path', {d:'M0 0 L10 5 L0 10 z', class:'arrowhead'}, mkr);
+const mkr2 = mk('marker', {id:'aha', viewBox:'0 0 10 10', refX:9, refY:5, markerWidth:5, markerHeight:5, orient:'auto-start-reverse'}, defs);
+mk('path', {d:'M0 0 L10 5 L0 10 z', fill:'var(--accent)'}, mkr2);
+const edgeEls = {};
+const eg = mk('g', {});
+for (const id in E) edgeEls[id] = mk('path', {d:pathFor(E[id]), class:'edge', 'marker-end':'url(#ah)'}, eg);
+
+const statusColor = {built:'var(--built)', recent:'var(--recent)', progress:'var(--progress)', left:'var(--left)'};
+const nodeEls = {};
+const ng = mk('g', {});
+for (const id in N) {
+  const n = N[id];
+  const g = mk('g', {class:'node', tabindex:0, role:'button', 'aria-label':`${n.t}, ${n.s}`}, ng);
+  mk('rect', {x:n.x - 74, y:n.y - 36, width:148, height:104, class:'hit'}, g);
+  mk('rect', {x:n.x - 30, y:n.y - 30, width:60, height:60, rx:12, class:'halo'}, g);
+  const tile = mk('g', {class:'tile', transform:`translate(${n.x - 24} ${n.y - 24})`}, g);
+  mk('rect', {width:48, height:48, rx:9, fill:COLORS[n.c] || n.c || COLORS.ext}, tile);
+  const gl = mk('g', {transform:'translate(8 8)'}, tile); gl.innerHTML = GLYPH[n.kind] || GLYPH.box;
+  if (n.status) mk('circle', {cx:n.x + 22, cy:n.y - 22, r:6, fill:statusColor[n.status], class:'statusdot'}, g);
+  const t = mk('text', {x:n.x, y:n.y + 44, class:'t', 'text-anchor':'middle'}, g); t.textContent = n.t;
+  const s = mk('text', {x:n.x, y:n.y + 60, class:'s', 'text-anchor':'middle'}, g); s.textContent = n.s;
+  g.addEventListener('click', () => showNode(id));
+  g.addEventListener('keydown', ev => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); showNode(id); } });
+  nodeEls[id] = g;
+}
+// envelope
+const env = mk('g', {opacity:0});
+mk('rect', {x:-13, y:-9, width:26, height:18, rx:3, fill:'var(--accent)', stroke:'var(--paper)', 'stroke-width':2}, env);
+mk('path', {d:'M-12 -7 L0 2 L12 -7', fill:'none', stroke:'var(--paper)', 'stroke-width':1.8}, env);
+
+// ---------- scenarios ----------
+// each step: who (speaker node), to (listener node), e: edges in travel order (prefix "<" = reverse), says (plain words),
+// msg: plain-language message card, raw: the real message shape, n: extra nodes to light up
+const SC = RIDE.scenarios;
+const TABLES = RIDE.tables || {};
+
+// ---------- player ----------
+const statusName = {built:'Built', recent:'Added recently', progress:'In progress', left:'Not started / blocked'};
+const st = { sc:Object.keys(SC)[0], i:0, playing:false, speed:1, timer:null, anim:null, t0:0, dur:0 };
+const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const $ = id => document.getElementById(id);
+const bubble = $('bubble'), now = $('now'), convo = $('convo'), progress = $('progress');
+const nameOf = (s, id) => (s.who === id && s.name) ? s.name : N[id].t;
+
+function clearMap() {
+  svg.classList.remove('dim');
+  for (const k in nodeEls) nodeEls[k].classList.remove('on', 'speaker', 'sel');
+  for (const k in edgeEls) { edgeEls[k].classList.remove('on'); edgeEls[k].setAttribute('marker-end', 'url(#ah)'); }
+  env.setAttribute('opacity', 0); cancelAnimationFrame(st.anim);
+  const tt = document.getElementById('ttags'); if (tt) tt.innerHTML = '';
+}
+var lastBubble = null;
+function placeBubble(s) {
+  lastBubble = s;
+  bubble.innerHTML = `<b>${esc(nameOf(s, s.who))} says</b>${esc(s.says)}`;
+  positionBubble();
+  bubble.classList.remove('hidden');
+}
+function positionBubble() {
+  if (!lastBubble) return;
+  const n = N[lastBubble.who], v = (typeof view !== 'undefined' && view) || {x:0, y:0, w:CW, h:CH};
+  const fx = (n.x - v.x) / v.w, fy = (n.y - v.y) / v.h, k = CW / v.w, right = fx > 0.7;
+  bubble.style.left = ((right ? fx - 40 * k / CW : fx + 40 * k / CW) * 100) + '%';
+  const below = fy < 0.2;   // near the top edge: put the bubble under the speaker so it isn't clipped
+  bubble.style.top = ((below ? fy + 72 * k / CH : fy - 30 * k / CH) * 100) + '%';
+  const bs = Math.max(0.65, Math.min(1, k));   // shrink the bubble a little when zoomed out
+  bubble.style.fontSize = (14.5 * bs) + 'px'; bubble.style.maxWidth = (260 * bs) + 'px';
+  bubble.style.transform = `translate(${right ? '-100%' : '0'}, ${below ? '0' : '-100%'})`;
+  if (typeof positionTags === 'function' && typeof ttagsEl !== 'undefined') positionTags();
+  bubble.style.visibility = (fx < -0.02 || fx > 1.02 || fy < -0.02 || fy > 1.05) ? 'hidden' : 'visible';
+}
+function animateEnvelope(edges) {
+  if (reduce || !edges.length) return;
+  const segs = edges.map(e => ({el: edgeEls[e.replace('<', '')], rev: e.startsWith('<')}));
+  const per = 1300 / st.speed; let start = null;
+  const tick = ts => {
+    if (start === null) start = ts;
+    const k = (ts - start) / per, i = Math.floor(k);
+    if (i >= segs.length) { env.setAttribute('opacity', 0); return; }
+    const f = k - i, { el, rev } = segs[i], L = el.getTotalLength(), p = el.getPointAtLength((rev ? 1 - f : f) * L);
+    env.setAttribute('transform', `translate(${p.x} ${p.y})`); env.setAttribute('opacity', 1);
+    st.anim = requestAnimationFrame(tick);
+  };
+  st.anim = requestAnimationFrame(tick);
+}
+function card(s, idx, total) {
+  const rows = Object.entries(s.msg).map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('');
+  return `<span class="kicker">${esc(SC[st.sc].name)} · step ${idx + 1} of ${total}</span>
+    <div class="route"><span>${esc(nameOf(s, s.who))}</span><span class="arrow">→</span><span>${esc(nameOf(s, s.to))}</span></div>
+    <p class="quote">“${esc(s.says)}”</p>
+    <div class="msg"><div class="msg-head">✉ The message, in plain words</div><dl>${rows}</dl>
+      <pre class="raw" id="raw" hidden>${esc(s.raw)}</pre></div>
+    ${s.tables && s.tables.length ? `<div class="tbls"><span class="kicker">Tables touched</span>${s.tables.map(([t, op, why]) => `<div class="tbl"><span class="op ${op}">${op}</span><code title="${esc((TABLES[t] || {}).what || '')}">${esc(t)}</code><span>${esc(why || '')}</span></div>`).join('')}</div>` : ''}
+    <button class="linkbtn" id="rawToggle" aria-expanded="false">Show the real message</button>
+    ${idx === total - 1 && SC[st.sc].real ? `<p class="realnote">${esc(SC[st.sc].real)}</p>` : ''}`;
+}
+function renderConvo() {
+  const steps = SC[st.sc].steps;
+  convo.innerHTML = steps.map((s, i) => `<li class="${i === st.i ? 'cur' : i > st.i ? 'future' : ''}"><button data-i="${i}"><span class="who">${esc(nameOf(s, s.who))} → ${esc(nameOf(s, s.to))}</span><span class="line">${esc(s.says)}</span>${(s.tables || []).length ? `<span class="tchips">${s.tables.map(([t, op]) => `<code class="op-${op}">${esc(t.split('.').pop())}</code>`).join('')}</span>` : ''}</button></li>`).join('');
+  convo.querySelectorAll('button').forEach(b => b.onclick = () => { pause(); go(+b.dataset.i); });
+  const cur = convo.querySelector('.cur'); if (cur) convo.scrollTop = Math.max(0, cur.offsetTop - convo.clientHeight + cur.offsetHeight + 8);
+}
+function renderProgress() {
+  const steps = SC[st.sc].steps;
+  progress.innerHTML = steps.map((_, i) => `<button data-i="${i}" class="${i < st.i ? 'done' : ''}" aria-label="Step ${i + 1}"><span class="fill"></span></button>`).join('');
+  progress.querySelectorAll('button').forEach(b => b.onclick = () => { pause(); go(+b.dataset.i); });
+  $('count').textContent = `${st.i + 1} / ${steps.length}`;
+}
+function stepDuration(s) { return Math.max(4200, s.e.length * 1300 + s.says.length * 42 + 1200) / st.speed; }
+function go(i) {
+  const steps = SC[st.sc].steps; st.i = Math.max(0, Math.min(i, steps.length - 1));
+  const s = steps[st.i];
+  clearMap(); svg.classList.add('dim');
+  document.querySelectorAll('button.chip[data-status]').forEach(c => c.setAttribute('aria-pressed', 'false'));
+  for (const k in nodeEls) nodeEls[k].classList.remove('hl');
+  [s.who, s.to, ...(s.n || [])].forEach(id => nodeEls[id].classList.add('on'));
+  nodeEls[s.who].classList.add('speaker');
+  (s.tables || []).forEach(([t]) => { const nd = TABLES[t] && TABLES[t].node; if (nd && nodeEls[nd]) nodeEls[nd].classList.add('on'); });
+  if (typeof renderTableTags === 'function' && typeof ttagsEl !== 'undefined') renderTableTags(s);
+  s.e.forEach(e => { const el = edgeEls[e.replace('<', '')]; el.classList.add('on'); el.setAttribute('marker-end', 'url(#aha)'); });
+  placeBubble(s); animateEnvelope(s.e); followStep(s);
+  now.innerHTML = card(s, st.i, steps.length);
+  $('rawToggle').onclick = ev => { const r = $('raw'), open = r.hidden; r.hidden = !open; ev.target.textContent = open ? 'Hide the real message' : 'Show the real message'; ev.target.setAttribute('aria-expanded', open); };
+  renderConvo(); renderProgress();
+  $('prev').disabled = st.i === 0;
+  clearTimeout(st.timer);
+  if (st.playing) {
+    st.dur = stepDuration(s); st.t0 = performance.now(); fillTick();
+    st.timer = setTimeout(() => { if (st.i < steps.length - 1) go(st.i + 1); else pause(); }, st.dur);
+  }
+}
+function fillTick() {
+  const f = progress.querySelectorAll('.fill')[st.i]; if (!f || !st.playing) return;
+  f.style.width = Math.min(100, (performance.now() - st.t0) / st.dur * 100) + '%';
+  if (st.playing) requestAnimationFrame(fillTick);
+}
+function play() { if (st.i === SC[st.sc].steps.length - 1) st.i = 0; st.playing = true; $('play').textContent = '❚❚'; $('play').setAttribute('aria-label', 'Pause'); go(st.i); }
+function pause() { st.playing = false; clearTimeout(st.timer); $('play').textContent = '▶'; $('play').setAttribute('aria-label', 'Play'); }
+$('play').onclick = () => st.playing ? pause() : play();
+$('next').onclick = () => { pause(); go(st.i + 1); };
+$('prev').onclick = () => { pause(); go(st.i - 1); };
+$('restart').onclick = () => { pause(); go(0); };
+document.addEventListener('keydown', ev => {
+  if (ev.altKey || ev.ctrlKey || ev.metaKey || ev.shiftKey) return;
+  const t = ev.target, tag = t && t.tagName;
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (t && t.isContentEditable)) return;
+  if ((ev.key === ' ' || ev.key === 'Enter') && t && t.closest && t.closest('.node')) return; // a focused map box handles its own Space/Enter
+  if (ev.key === 'ArrowLeft') { ev.preventDefault(); pause(); go(st.i - 1); }
+  else if (ev.key === 'ArrowRight') { ev.preventDefault(); pause(); go(st.i + 1); }
+  else if (ev.key === ' ' || ev.code === 'Space') { ev.preventDefault(); st.playing ? pause() : play(); }
+});
+document.querySelectorAll('.speed button').forEach(b => b.onclick = () => {
+  st.speed = +b.dataset.speed; document.querySelectorAll('.speed button').forEach(x => x.setAttribute('aria-pressed', x === b)); if (st.playing) go(st.i);
+});
+function renderScenarioButtons() {
+  const sb = $('scenarioButtons');
+  sb.innerHTML = Object.entries(SC).map(([k, v]) => `<button data-sc="${k}" aria-pressed="${st.sc === k}">${esc(v.name)}</button>`).join('');
+  sb.querySelectorAll('button').forEach(b => b.onclick = () => { const was = st.playing; pause(); st.sc = b.dataset.sc; renderScenarioButtons(); go(0); if (was) play(); });
+}
+function showNode(id) {
+  pause(); clearMap(); bubble.classList.add('hidden');
+  nodeEls[id].classList.add('sel');
+  const n = N[id];
+  const links = Object.values(E).filter(e => e[0] === id || e[1] === id).map(e => N[e[0] === id ? e[1] : e[0]].t);
+  now.innerHTML = `<span class="kicker">Service</span><div class="route"><span>${esc(n.t)}</span><span class="muted" style="font:400 14px var(--f-body)">${esc(n.s)}</span></div>
+    ${n.status ? `<span class="chip ${n.status}" style="justify-self:start">${statusName[n.status]}</span>` : ''}
+    <p>${esc(n.what)}</p><ul class="facts">${(n.facts || []).map(f => `<li>${esc(f)}</li>`).join('')}</ul>
+    <p class="muted" style="font-size:13px">Talks to: ${[...new Set(links)].map(esc).join(', ')}</p>
+    <button class="linkbtn" id="backToScene">Back to the scenario</button>`;
+  $('backToScene').onclick = () => go(st.i);
+}
+$('statusToggle').onclick = e => { const on = e.target.getAttribute('aria-pressed') !== 'true'; e.target.setAttribute('aria-pressed', on); e.target.textContent = on ? 'Shown' : 'Hidden'; svg.classList.toggle('nostatus', !on); };
+// header, legend, status controls
+document.getElementById('title').textContent = RIDE.title || 'Ride the system';
+document.getElementById('eyebrow').textContent = RIDE.eyebrow || '';
+document.getElementById('lede').textContent = RIDE.lede || '';
+document.getElementById('intro').innerHTML = (RIDE.intro || []).map(([h, d]) => `<div><b>${esc(h)}</b><span>${esc(d)}</span></div>`).join('');
+const LEGEND = RIDE.legend || [['compute','Compute'],['msg','Messaging & events'],['db','Database'],['storage','Storage'],['ext','Outside AWS']];
+document.getElementById('legend').innerHTML = LEGEND.map(([c, l]) => `<span class="sw"><i style="background:${COLORS[c] || c}"></i>${esc(l)}</span>`).join('');
+if (!Object.values(N).some(n => n.status)) document.getElementById('statusCtl').hidden = true;
+renderScenarioButtons(); go(0);
+
+// ---------- board ----------
+const BOARD = RIDE.board || [];
+if (BOARD.length) { document.getElementById('boardSec').hidden = false; document.getElementById('board-h').textContent = RIDE.boardTitle || 'Status'; document.getElementById('boardNote').textContent = RIDE.boardNote || ''; }
+document.getElementById('board').innerHTML = BOARD.map(col => `<div class="col ${col.c}"><h3><span class="chip ${col.c}">${col.h}</span><span class="n">${col.items.length}</span></h3>
+  ${col.items.map(([t,k,d]) => `<div class="item"><span class="k">${esc(k)}</span><b>${esc(t)}</b><span>${esc(d)}</span></div>`).join('')}</div>`).join('');
+
+// ---------- full screen ----------
+const stage = document.querySelector('.bleed'), fsBtn = document.getElementById('fullscreen');
+const isFull = () => document.fullscreenElement === stage || stage.classList.contains('expanded');
+function fitStage() {   // in full screen, size the map to the largest box with the canvas's aspect ratio
+  const inner = document.getElementById('mapinner'), box = document.querySelector('.mapbox');
+  if (!isFull()) { inner.style.width = inner.style.height = ''; return; }
+  const w = Math.min(box.clientWidth, box.clientHeight * CW / CH);
+  inner.style.width = w + 'px'; inner.style.height = (w * CH / CW) + 'px';
+}
+window.addEventListener('resize', () => requestAnimationFrame(fitStage));
+function syncFs() { const on = isFull(); requestAnimationFrame(fitStage); fsBtn.setAttribute('aria-pressed', on); fsBtn.textContent = on ? '✕' : '⛶'; fsBtn.title = on ? 'Exit full screen (F or Esc)' : 'Full screen (F)'; document.body.classList.toggle('noscroll', stage.classList.contains('expanded')); }
+async function toggleFs() {
+  if (document.fullscreenElement) { try { await document.exitFullscreen(); } catch (e) {} }
+  else if (stage.classList.contains('expanded')) stage.classList.remove('expanded');
+  else { try { if (!stage.requestFullscreen) throw 0; await stage.requestFullscreen(); } catch (e) { stage.classList.add('expanded'); } }
+  syncFs();
+}
+fsBtn.onclick = toggleFs;
+document.addEventListener('fullscreenchange', syncFs);
+document.addEventListener('keydown', ev => {
+  if (ev.altKey || ev.ctrlKey || ev.metaKey) return;
+  const t = ev.target, tag = t && t.tagName;
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (t && t.isContentEditable)) return;
+  if (ev.key === 'f' || ev.key === 'F') { ev.preventDefault(); toggleFs(); }
+  else if (ev.key === 'Escape' && stage.classList.contains('expanded')) { stage.classList.remove('expanded'); syncFs(); }
+});
+
+// ---------- status filter: click a build-status chip to highlight its components ----------
+let statusFilter = null;
+const chips = [...document.querySelectorAll('button.chip[data-status]')];
+chips.forEach(c => { const n = Object.values(N).filter(x => x.status === c.dataset.status).length; c.insertAdjacentHTML('beforeend', ` <span class="n">${n}</span>`); c.disabled = !n; });
+function clearStatusFilter() { statusFilter = null; chips.forEach(c => c.setAttribute('aria-pressed', 'false')); for (const k in nodeEls) nodeEls[k].classList.remove('hl'); }
+function filterStatus(s) {
+  if (chips.find(c => c.dataset.status === s).getAttribute('aria-pressed') === 'true') { clearStatusFilter(); go(st.i); return; }
+  pause(); clearMap(); bubble.classList.add('hidden'); clearStatusFilter();
+  statusFilter = s; chips.forEach(c => c.setAttribute('aria-pressed', c.dataset.status === s));
+  svg.style.setProperty('--hlc', `var(--${s})`); svg.classList.add('dim'); svg.classList.remove('nostatus');
+  const st2 = document.getElementById('statusToggle'); if (st2) { st2.setAttribute('aria-pressed', 'true'); st2.textContent = 'Shown'; }
+  const ids = Object.keys(N).filter(id => N[id].status === s);
+  ids.forEach(id => nodeEls[id].classList.add('hl'));
+  now.style.setProperty('--hlc', `var(--${s})`);
+  now.innerHTML = `<span class="kicker">Build status</span><div class="route"><span class="chip ${s}">${statusName[s]}</span><span class="muted" style="font:400 14px var(--f-body)">${ids.length} component${ids.length === 1 ? '' : 's'}</span></div>
+    <ul class="hl-list">${ids.map(id => `<li><button data-id="${id}"><b>${esc(N[id].t)}</b><span>${esc((N[id].facts || [])[0] || N[id].s)}</span></button></li>`).join('')}</ul>
+    <button class="linkbtn" id="clearFilter">Clear and go back to the scenario</button>`;
+  now.querySelectorAll('.hl-list button').forEach(b => b.onclick = () => showNode(b.dataset.id));
+  document.getElementById('clearFilter').onclick = () => { clearStatusFilter(); go(st.i); };
+}
+chips.forEach(c => c.onclick = () => filterStatus(c.dataset.status));
+// playing or stepping a scenario clears the filter
+['play', 'next', 'prev', 'restart'].forEach(id => document.getElementById(id).addEventListener('click', clearStatusFilter, true));
+document.addEventListener('keydown', ev => { if (['ArrowLeft', 'ArrowRight', ' '].includes(ev.key) && !(ev.target.closest && ev.target.closest('input,textarea,select,.node'))) clearStatusFilter(); }, true);
+document.getElementById('scenarioButtons').addEventListener('click', clearStatusFilter, true);
+
+// ---------- zoom & pan ----------
+var view = {x:0, y:0, w:CW, h:CH};
+const MAXZ = 4, MINZ = 0.4, mapEl = svg, zoomLvl = document.getElementById('zoomLvl');
+const zoomOf = () => CW / view.w;
+function applyView() {
+  mapEl.setAttribute('viewBox', `${view.x} ${view.y} ${view.w} ${view.h}`);
+  mapEl.classList.toggle('zoomed', zoomOf() > 1.001);
+  zoomLvl.textContent = Math.round(zoomOf() * 100) + '%';
+  positionBubble();
+}
+function clampView(v) {
+  const z = Math.min(MAXZ, Math.max(MINZ, CW / v.w)), w = CW / z, h = CH / z;
+  // zoomed in: keep the view inside the map; zoomed out: keep the map centred in the frame
+  return {w, h, x: w >= CW ? (CW - w) / 2 : Math.min(CW - w, Math.max(0, v.x)), y: h >= CH ? (CH - h) / 2 : Math.min(CH - h, Math.max(0, v.y))};
+}
+let viewAnim = null, pendingView = null;
+function animateTo(target, ms = 380) {
+  cancelAnimationFrame(viewAnim); target = clampView(target); pendingView = target;
+  zoomLvl.textContent = Math.round(CW / target.w * 100) + '%';
+  if (reduce) { view = target; pendingView = null; applyView(); return; }
+  const from = {...view}, t0 = performance.now();
+  const tick = now => { const f = Math.min(1, (now - t0) / ms), e = 1 - Math.pow(1 - f, 3);
+    view = {x: from.x + (target.x - from.x) * e, y: from.y + (target.y - from.y) * e, w: from.w + (target.w - from.w) * e, h: from.h + (target.h - from.h) * e};
+    applyView(); if (f < 1) viewAnim = requestAnimationFrame(tick); else pendingView = null; };
+  viewAnim = requestAnimationFrame(tick);
+}
+function zoomAt(factor, px, py, animate = true) {   // px,py in map units: this point stays put
+  const base = (animate && pendingView) || view;
+  const z = Math.min(MAXZ, Math.max(MINZ, CW / base.w * factor)), w = CW / z, h = CH / z;
+  const fx = (px - base.x) / base.w, fy = (py - base.y) / base.h;
+  const t = {x: px - fx * w, y: py - fy * h, w, h};
+  if (animate) animateTo(t); else { view = clampView(t); applyView(); }
+}
+const centre = () => { const b = pendingView || view; return [b.x + b.w / 2, b.y + b.h / 2]; };
+document.getElementById('zoomIn').onclick = () => zoomAt(1.5, ...centre());
+document.getElementById('zoomOut').onclick = () => zoomAt(1 / 1.5, ...centre());
+document.getElementById('zoomFit').onclick = () => animateTo({x:0, y:0, w:CW, h:CH});
+function toMap(clientX, clientY) { const r = mapEl.getBoundingClientRect(); return [view.x + (clientX - r.left) / r.width * view.w, view.y + (clientY - r.top) / r.height * view.h]; }
+document.getElementById('mapinner').addEventListener('wheel', ev => {
+  if (!(ev.ctrlKey || ev.metaKey)) return;               // plain scroll keeps scrolling the page; pinch arrives as ctrl+wheel
+  ev.preventDefault(); cancelAnimationFrame(viewAnim);
+  zoomAt(Math.exp(-ev.deltaY * 0.0022), ...toMap(ev.clientX, ev.clientY), false);
+}, {passive: false});
+let drag = null;
+mapEl.addEventListener('pointerdown', ev => {
+  if (zoomOf() <= 1.001 || ev.button !== 0) return;
+  drag = {x: ev.clientX, y: ev.clientY, v: {...view}, moved: false, id: ev.pointerId};
+});
+mapEl.addEventListener('pointermove', ev => {
+  if (!drag) return;
+  const dx = ev.clientX - drag.x, dy = ev.clientY - drag.y;
+  if (!drag.moved && Math.hypot(dx, dy) < 5) return;
+  if (!drag.moved) { drag.moved = true; mapEl.setPointerCapture(drag.id); mapEl.classList.add('panning'); cancelAnimationFrame(viewAnim); }
+  const r = mapEl.getBoundingClientRect();
+  view = clampView({x: drag.v.x - dx / r.width * drag.v.w, y: drag.v.y - dy / r.height * drag.v.h, w: drag.v.w, h: drag.v.h}); applyView();
+});
+const endDrag = ev => { if (!drag) return; const moved = drag.moved; mapEl.classList.remove('panning'); drag = null;
+  if (moved) { const stop = e => { e.stopPropagation(); e.preventDefault(); }; mapEl.addEventListener('click', stop, {capture: true, once: true}); } };
+mapEl.addEventListener('pointerup', endDrag); mapEl.addEventListener('pointercancel', endDrag);
+document.addEventListener('keydown', ev => {
+  if (ev.altKey || ev.ctrlKey || ev.metaKey) return;
+  const t = ev.target, tag = t && t.tagName;
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (t && t.isContentEditable)) return;
+  if (ev.key === '+' || ev.key === '=') { ev.preventDefault(); zoomAt(1.5, ...centre()); }
+  else if (ev.key === '-' || ev.key === '_') { ev.preventDefault(); zoomAt(1 / 1.5, ...centre()); }
+  else if (ev.key === '0') { ev.preventDefault(); animateTo({x:0, y:0, w:CW, h:CH}); }
+});
+// while zoomed in, keep each step's speaker and listener in view
+function followStep(s) {
+  if (typeof view === 'undefined' || !view || zoomOf() <= 1.001) return;
+  const ids = [s.who, s.to, ...(s.n || [])], xs = ids.map(i => N[i].x), ys = ids.map(i => N[i].y);
+  const minx = Math.min(...xs) - 120, maxx = Math.max(...xs) + 120, miny = Math.min(...ys) - 120, maxy = Math.max(...ys) + 140;
+  const z = Math.min(zoomOf(), CW / Math.max(maxx - minx, (maxy - miny) * CW / CH));
+  const w = CW / Math.max(1, z), h = CH / Math.max(1, z);
+  animateTo({x: (minx + maxx) / 2 - w / 2, y: (miny + maxy) / 2 - h / 2, w, h});
+}
+applyView();
+
+// ---------- tables: per-step tags on the map + reference index ----------
+const tn = t => t.split('.').pop();
+var ttagsEl = document.getElementById('ttags');
+if (!ttagsEl) { ttagsEl = document.createElement('div'); ttagsEl.id = 'ttags'; document.getElementById('mapinner').appendChild(ttagsEl); }
+var curTables = null;
+function renderTableTags(s) {
+  curTables = s && s.tables && s.tables.length ? s : null;
+  ttagsEl.innerHTML = '';
+  if (!curTables) return;
+  const byNode = {};
+  s.tables.forEach(([t, op]) => { const nd = TABLES[t] && TABLES[t].node; if (nd && N[nd]) (byNode[nd] = byNode[nd] || []).push([t, op]); });
+  for (const nd in byNode) {
+    const el = document.createElement('div'); el.className = 'ttag'; el.dataset.node = nd;
+    el.innerHTML = byNode[nd].map(([t, op]) => `<span><i class="${op}">${op}</i>${esc(tn(t))}</span>`).join('');
+    ttagsEl.appendChild(el);
+  }
+  positionTags();
+}
+function positionTags() {
+  const v = (typeof view !== 'undefined' && view) || {x:0, y:0, w:CW, h:CH};
+  ttagsEl.querySelectorAll('.ttag').forEach(el => {
+    const n = N[el.dataset.node], fx = (n.x - v.x) / v.w, low = n.y > CH * 0.6;
+    el.style.left = (fx * 100) + '%';
+    el.style.top = (((low ? n.y - 44 : n.y + 72) - v.y) / v.h * 100) + '%';
+    el.style.transform = `translate(-50%, ${low ? '-100%' : '0'})`;
+    el.style.visibility = (fx < -0.02 || fx > 1.02) ? 'hidden' : 'visible';
+  });
+}
+function renderTablesRef() {
+  const names = Object.keys(TABLES); if (!names.length) return;
+  document.getElementById('tablesSec').hidden = false;
+  const uses = {}; names.forEach(t => uses[t] = []);
+  for (const [k, sc] of Object.entries(SC)) sc.steps.forEach((s, i) => (s.tables || []).forEach(([t, op]) => { (uses[t] = uses[t] || []).push({k, i, op}); }));
+  names.sort((a, b) => ((TABLES[a].node || '') + a).localeCompare((TABLES[b].node || '') + b));
+  document.getElementById('tref').innerHTML = `<thead><tr><th>Table</th><th>What it holds</th><th>Used in</th></tr></thead><tbody>` + names.map(t => `<tr>
+    <td><code>${esc(t)}</code><span class="where">${esc(N[TABLES[t].node] ? N[TABLES[t].node].t : '')}</span></td>
+    <td>${esc(TABLES[t].what || '')}</td>
+    <td><div class="uses">${uses[t].map(u => `<button data-k="${u.k}" data-i="${u.i}" title="${esc(SC[u.k].steps[u.i].says)}"><span class="op ${u.op}">${u.op}</span>${esc(SC[u.k].name)} · ${u.i + 1}</button>`).join('') || '<span class="muted">not in a scenario yet</span>'}</div></td></tr>`).join('') + `</tbody>`;
+  document.querySelectorAll('#tref .uses button').forEach(b => b.onclick = () => {
+    pause(); st.sc = b.dataset.k; renderScenarioButtons(); go(+b.dataset.i);
+    document.querySelector('.mapbox').scrollIntoView({behavior: reduce ? 'auto' : 'smooth', block: 'center'});
+  });
+}
+renderTablesRef(); if (SC[st.sc]) renderTableTags(SC[st.sc].steps[st.i]);
+</script>
